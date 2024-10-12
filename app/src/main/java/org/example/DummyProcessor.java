@@ -3,6 +3,7 @@ package org.example;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Date;
 import java.util.Random;
 import java.util.UUID;
 import org.apache.kafka.streams.processor.api.Processor;
@@ -13,6 +14,12 @@ public class DummyProcessor implements Processor<String, String, Void, Void> {
 
     private KeyValueStore<String, String> store;
 
+    private int numRecordsProcessed;
+
+    public DummyProcessor() {
+        numRecordsProcessed = 0;
+    }
+
     @Override
     public void init(ProcessorContext<Void, Void> ctx) {
         this.store = ctx.getStateStore(App.STATE_STORE_NAME);
@@ -20,7 +27,12 @@ public class DummyProcessor implements Processor<String, String, Void, Void> {
 
     @Override
     public void process(Record<String, String> record) {
+        numRecordsProcessed++;
         store.put(UUID.randomUUID().toString(), generateRandomText());
+
+        if (numRecordsProcessed % 500 == 0) {
+            System.out.println("processed 500 records at " + new Date());
+        }
     }
 
     /////////////////////////////////////////////

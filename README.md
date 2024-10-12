@@ -24,7 +24,7 @@ org.apache.kafka.streams.errors.TaskCorruptedException: Tasks [1_10] are corrupt
 	at org.apache.kafka.streams.processor.internals.StreamThread.runLoop(StreamThread.java:711) [kafka-streams-3.8.1-SNAPSHOT.jar:?]
 ```
 
-The `AddOffsetsToTxn` is always noted. 
+With the LittleHorse setup, the crash always involves a timeout on `AddOffsetsToTxn`. This repo unfortunately produces (pun intended) a different error. However, it's both related with quotas, so it is possible that the same root cause may fix both issues.
 
 ## Setup
 
@@ -71,17 +71,67 @@ We would expect:
 * The Generator thread is not throttled.
 * The Kafka Streams app processes messages happily, but due to throttling there is a slowly-growing consumer lag that never catches up.
 
+The application should print out every 15-20 seconds or so "processed 500 records" when healthy.
+
 ### Actual Behavior
 
-Well, just watch...there's a few crashes. That's not good for such a simple setup.
+If you comment out the line in `setup.sh` that creates quotas, the app will run happily without crashing for a long time, and you can observe that the consumer lag is basically zero.
 
-I was hoping to reproduce the error with `AddOffsetsToTxn`, but I couldn't. Instead, I periodically get this error:
+Howver, with quotas, we get crashes.
+
+I was hoping to reproduce the error with `AddOffsetsToTxn`, but I couldn't. Instead, I get rebalance storms, and also:
+
 ```
 16:38:58 ERROR [KAFKA] RecordCollectorImpl - stream-thread [my-app-with-quota-StreamThread-1] stream-task [0_0] Error encountered sending record to topic test-app-dummy-store-changelog for task 0_0 due to:
 org.apache.kafka.common.errors.InvalidProducerEpochException: Producer attempted to produce with an old epoch.
 Written offsets would not be recorded and no more records would be sent since the producer is fenced, indicating the task may be migrated out
 ```
 
+and
+
+```
+org.apache.kafka.common.errors.InvalidProducerEpochException: Producer attempted to produce with an old epoch.
+Written offsets would not be recorded and no more records would be sent since the producer is fenced, indicating the task may be migrated out; it means all tasks belonging to this thread should be migrated.
+        at org.apache.kafka.streams.processor.internals.RecordCollectorImpl.recordSendError(RecordCollectorImpl.java:306) ~[kafka-streams-3.8.0.jar:?]
+        at org.apache.kafka.streams.processor.internals.RecordCollectorImpl.lambda$send$1(RecordCollectorImpl.java:286) ~[kafka-streams-3.8.0.jar:?]
+        at org.apache.kafka.clients.producer.KafkaProducer$AppendCallbacks.onCompletion(KafkaProducer.java:1565) ~[kafka-clients-3.8.0.jar:?]
+        at org.apache.kafka.clients.producer.internals.ProducerBatch.completeFutureAndFireCallbacks(ProducerBatch.java:311) ~[kafka-clients-3.8.0.jar:?]
+        at org.apache.kafka.clients.producer.internals.ProducerBatch.done(ProducerBatch.java:272) ~[kafka-clients-3.8.0.jar:?]
+        at org.apache.kafka.clients.producer.internals.ProducerBatch.completeExceptionally(ProducerBatch.java:236) ~[kafka-clients-3.8.0.jar:?]
+        at org.apache.kafka.clients.producer.internals.Sender.failBatch(Sender.java:829) ~[kafka-clients-3.8.0.jar:?]
+        at org.apache.kafka.clients.producer.internals.Sender.failBatch(Sender.java:818) ~[kafka-clients-3.8.0.jar:?]
+        at org.apache.kafka.clients.producer.internals.Sender.failBatch(Sender.java:770) ~[kafka-clients-3.8.0.jar:?]
+        at org.apache.kafka.clients.producer.internals.Sender.completeBatch(Sender.java:702) ~[kafka-clients-3.8.0.jar:?]
+        at org.apache.kafka.clients.producer.internals.Sender.lambda$null$2(Sender.java:627) ~[kafka-clients-3.8.0.jar:?]
+        at java.util.ArrayList.forEach(ArrayList.java:1596) ~[?:?]
+        at org.apache.kafka.clients.producer.internals.Sender.lambda$handleProduceResponse$3(Sender.java:612) ~[kafka-clients-3.8.0.jar:?]
+        at java.lang.Iterable.forEach(Iterable.java:75) ~[?:?]
+        at org.apache.kafka.clients.producer.internals.Sender.handleProduceResponse(Sender.java:612) ~[kafka-clients-3.8.0.jar:?]
+        at org.apache.kafka.clients.producer.internals.Sender.lambda$sendProduceRequest$9(Sender.java:916) ~[kafka-clients-3.8.0.jar:?]
+        at org.apache.kafka.clients.ClientResponse.onComplete(ClientResponse.java:154) ~[kafka-clients-3.8.0.jar:?]
+        at org.apache.kafka.clients.NetworkClient.completeResponses(NetworkClient.java:618) ~[kafka-clients-3.8.0.jar:?]
+        at org.apache.kafka.clients.NetworkClient.poll(NetworkClient.java:610) ~[kafka-clients-3.8.0.jar:?]
+        at org.apache.kafka.clients.producer.internals.Sender.runOnce(Sender.java:348) ~[kafka-clients-3.8.0.jar:?]
+        at org.apache.kafka.clients.producer.internals.Sender.run(Sender.java:250) ~[kafka-clients-3.8.0.jar:?]
+        at java.lang.Thread.run(Thread.java:1583) ~[?:?]
+Caused by: org.apache.kafka.common.errors.InvalidProducerEpochException: Producer attempted to produce with an old epoch.
+
+```
+
 With a single stream thread and a single application instance, low throughput (<35KB/s), and no broker or client crashes, we should NOT expect `InvalidProducerEpochException`s. That means there's some bug somewhere.
+
+## Follow-Ups
+
+### Playing Around
+
+Feel free to play around with the following:
+
+1. Quota value: check `setup.sh`
+2. Number of partitions in the topic (currently we use `1` for simplicity).
+3. Number of requests being sent by the Generator: `App.java` in `App#startProducer()`.
+4. Amount of data written to the changelog for each record sent by the Generator: `DummyProcessor.java`.
+5. Kafka Streams Configuration
+
+### The `AddOffsetsToTxn` Error
 
 As a follow-up, I will try to give instructions to produce the `AddOffsetsToTxn` error below this readme. That is 100% reliable when using LittleHorse, but LH is a heavier application and requires running two shell scripts to generate load.

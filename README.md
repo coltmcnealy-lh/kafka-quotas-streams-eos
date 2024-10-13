@@ -1,5 +1,7 @@
 # Quotas and Kafka Streams EOS
 
+See some discussion [here](https://github.com/coltmcnealy-lh/kafka-quotas-streams-eos/issues/1)
+
 Our soak tests have recurring problems with `TaskCorruptedException`s, `ProducerFencedException`s, and other failures. All of them seem to be caused by crashes or transaction failures or timeouts in the producer. These failures become less common if we significantly over-provision our Kafka brokers, but even with a very healthy Kafka cluster, they still persist.
 
 When doing local testing, we get the same exact stack traces _when we slightly exceed configured producer byte rate quotas._

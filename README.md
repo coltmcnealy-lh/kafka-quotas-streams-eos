@@ -46,6 +46,14 @@ gradle run
 
 Then wait and see exceptions happen.
 
+You can kill orphaned gradle processes like:
+```
+ps aux | grep org.example.App | awk '{ print $2 }' | xargs kill -9
+
+# cleans/recreates kafka and cleans the state directory
+./setup.sh
+```
+
 ### What the App does
 
 The app is very simple. It has two threads:

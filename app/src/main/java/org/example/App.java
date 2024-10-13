@@ -1,5 +1,6 @@
 package org.example;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -53,6 +54,13 @@ public class App {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+
+        // Limit to 30 records per poll to make sure we're not hitting a transaction timeout. This
+        // is something we should be able to process in just one poll.
+        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 30);
+        // This is the default; we commit quickly though to make sure that we aren't having any
+        // funny business with transaction timeouts.
+        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
 
         StoreBuilder<KeyValueStore<String, String>> storeBuilder = Stores.keyValueStoreBuilder(
                 Stores.persistentKeyValueStore(STATE_STORE_NAME), Serdes.String(), Serdes.String());

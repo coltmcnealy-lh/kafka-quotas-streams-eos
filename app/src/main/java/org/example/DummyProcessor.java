@@ -31,7 +31,8 @@ public class DummyProcessor implements Processor<String, String, Void, Void> {
         store.put(UUID.randomUUID().toString(), generateRandomText());
 
         if (numRecordsProcessed % 500 == 0) {
-            System.out.println("processed 500 records at " + new Date());
+            String batchSize = numRecordsProcessed == 0 ? "first" : "500";
+            System.out.println("processed " + batchSize + " records at " + new Date());
         }
     }
 

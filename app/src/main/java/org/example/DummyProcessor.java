@@ -6,6 +6,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.Random;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -14,11 +16,8 @@ public class DummyProcessor implements Processor<String, String, Void, Void> {
 
     private KeyValueStore<String, String> store;
 
-    private int numRecordsProcessed;
-
-    public DummyProcessor() {
-        numRecordsProcessed = 0;
-    }
+    // This is silly, but we want to share it across all Streams Tasks.
+    private static AtomicInteger numRecordsProcessed = new AtomicInteger(0);
 
     @Override
     public void init(ProcessorContext<Void, Void> ctx) {
@@ -27,13 +26,16 @@ public class DummyProcessor implements Processor<String, String, Void, Void> {
 
     @Override
     public void process(Record<String, String> record) {
-        numRecordsProcessed++;
+        // Write 1KB into the store
         store.put(UUID.randomUUID().toString(), generateRandomText());
 
-        if (numRecordsProcessed % 500 == 0) {
-            String batchSize = numRecordsProcessed == 0 ? "first" : "500";
+        // Hacky way to print out every 100 records to the console
+        int currentNumRecordsProcessed = numRecordsProcessed.get();
+        if (currentNumRecordsProcessed % 100 == 0) {
+            String batchSize = currentNumRecordsProcessed == 0 ? "first" : "100";
             System.out.println("processed " + batchSize + " records at " + new Date());
         }
+        numRecordsProcessed.addAndGet(1);
     }
 
     /////////////////////////////////////////////
@@ -45,7 +47,7 @@ public class DummyProcessor implements Processor<String, String, Void, Void> {
 
     public static String generateRandomText() {
         StringBuilder sb = new StringBuilder();
-        
+
         // Generate random characters until the resulting string is approximately 1024 bytes in length
         while (sb.toString().getBytes(StandardCharsets.UTF_8).length < SIZE_IN_BYTES) {
             int index = random.nextInt(CHARACTERS.length());

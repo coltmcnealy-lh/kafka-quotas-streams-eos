@@ -57,10 +57,11 @@ public class App {
 
         // Limit to 30 records per poll to make sure we're not hitting a transaction timeout. This
         // is something we should be able to process in just one poll.
-        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 30);
+        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 1);
         // This is the default; we commit quickly though to make sure that we aren't having any
         // funny business with transaction timeouts.
-        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 200);
+        props.put(StreamsConfig.producerPrefix("linger.ms"), 1000);
 
         StoreBuilder<KeyValueStore<String, String>> storeBuilder = Stores.keyValueStoreBuilder(
                 Stores.persistentKeyValueStore(STATE_STORE_NAME), Serdes.String(), Serdes.String());
